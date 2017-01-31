@@ -11,34 +11,19 @@ namespace tlv {
 #define TLVITEM_QUAL item<TAGTYPE, LENTYPE>
 
 TLVSET_TEMPLATE
-class item {
-public:
-    TAGTYPE     tag;
-    LENTYPE     len;
-    size_t      off;
+class item;
 
-    item(TAGTYPE t, LENTYPE l, size_t o):
-        tag {t}, len {l}, off {o} {}
-
-//        len {*(LENTYPE*)(base + off)},
-//        val {base + off + sizeof(LENTYPE)} {}
-};
-
-
-TLVSET_TEMPLATE
+template<typename TAGTYPE, typename LENTYPE>
 class set: public std::multimap<TAGTYPE, TLVITEM_QUAL> {
-
 public:
     set(const std::string&);
-
     set() {}
-    auto parse(const std::string&) -> int;
 
+    auto parse(const std::string&) -> int;
     auto repr(std::ostream& out) const -> std::ostream&;
 
-    using IterCb = std::function<bool(const TLVITEM_QUAL& r)>;
-    auto iterate(IterCb) const -> void;
-
+    template<typename TGT, typename IT>
+    auto value(IT) const -> const TGT*;
 
 
 
@@ -51,6 +36,20 @@ private:
     const TOF* retrieve(std::string::iterator& i, size_t l = sizeof(TOF)) const;
     void _parse();
     void setBase(const std::string& d);
+};
+
+TLVSET_TEMPLATE
+class item {
+public:
+    TAGTYPE     tag;
+    LENTYPE     len;
+    size_t      off;
+
+    item(TAGTYPE t, LENTYPE l, size_t o):
+        tag {t}, len {l}, off {o} {}
+
+//        len {*(LENTYPE*)(base + off)},
+//        val {base + off + sizeof(LENTYPE)} {}
 };
 
 #define BADF badformat(__LINE__)
@@ -111,18 +110,16 @@ auto TLVSET_QUAL::setBase(const std::string& d) -> void {
 
 TLVSET_TEMPLATE
 auto TLVSET_QUAL::repr(std::ostream& out) const -> std::ostream& {
-    iterate(
-        [&out] (const TLVITEM_QUAL& r) {
-            out << "tag " << r.tag << " len " << r.len << " off " << r.off << std::endl;
-            return true;
-        });
+    for (const auto& r: *this)
+        out << "tag " << r.second.tag << " len " << r.second.len << " off " << r.second.off << std::endl;
     return out;
 }
 
 TLVSET_TEMPLATE
-auto TLVSET_QUAL::iterate(IterCb cb) const -> void {
-    for (const auto& o: *this)
-        if (!cb(o.second))
-            return;
+template<typename TGT, typename IT>
+auto TLVSET_QUAL::value(IT i) const -> const TGT* {
+    if (i->second.len < sizeof(TGT))
+        throw BADF;
+    return (TGT*)(base.c_str() + i->second.off);
 }
 }
